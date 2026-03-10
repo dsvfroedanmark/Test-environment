@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum ConnectorType {
+  BROWSER
+  ANTHROPIC
+  GEMINI
+  MAILCHIMP
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  OUTLOOK
+  CUSTOM
+}
+
+enum RequestStatus {
+  DRAFT
+  PLANNING
+  PLAN_READY
+  PLAN_APPROVED
+  EXECUTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PlanApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum ArtifactType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  DATA
+  SOCIAL_POST
+  EMAIL
+  REPORT
+}
+
+enum ActionMode {
+  READ
+  WRITE
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id         String      @id @default(cuid())
+  email      String      @unique
+  name       String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  workspaces Workspace[]
+  requests   Request[]
+}
+
+model Workspace {
+  id         String      @id @default(cuid())
+  name       String
+  slug       String      @unique
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  users      User[]
+  connectors Connector[]
+  requests   Request[]
+}
+
+model Connector {
+  id          String        @id @default(cuid())
+  name        String
+  type        ConnectorType
+  description String?
+  enabled     Boolean       @default(false)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  credentials ConnectorCredential[]
+  steps       ExecutionStep[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([workspaceId, type])
+}
+
+model ConnectorCredential {
+  id          String    @id @default(cuid())
+  connectorId String
+  connector   Connector @relation(fields: [connectorId], references: [id])
+  key         String
+  value       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([connectorId, key])
+}
+
+model Request {
+  id          String        @id @default(cuid())
+  title       String?
+  rawInput    String
+  status      RequestStatus @default(DRAFT)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id])
+  plan        ExecutionPlan?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ExecutionPlan {
+  id              String             @id @default(cuid())
+  requestId       String             @unique
+  request         Request            @relation(fields: [requestId], references: [id])
+  approvalStatus  PlanApprovalStatus @default(PENDING)
+  interpretedGoal String
+  deliverables    Json
+  assumptions     Json
+  expectedOutputs Json
+  planJson        Json
+  steps           ExecutionStep[]
+  artifacts       OutputArtifact[]
+  approvedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model ExecutionStep {
+  id            String        @id @default(cuid())
+  planId        String
+  plan          ExecutionPlan @relation(fields: [planId], references: [id])
+  order         Int
+  name          String
+  description   String
+  connectorId   String?
+  connector     Connector?    @relation(fields: [connectorId], references: [id])
+  connectorType ConnectorType
+  actionMode    ActionMode
+  status        StepStatus    @default(PENDING)
+  inputJson     Json?
+  outputJson    Json?
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model OutputArtifact {
+  id          String        @id @default(cuid())
+  planId      String
+  plan        ExecutionPlan @relation(fields: [planId], references: [id])
+  stepId      String?
+  type        ArtifactType
+  title       String
+  description String?
+  contentJson Json
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
